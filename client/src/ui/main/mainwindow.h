@@ -4,7 +4,7 @@
 #include <QMainWindow>
 #include <QMouseEvent>
 #include <QButtonGroup>
-#include "socket.h"
+#include "src/common/network/socket.h"
 #include "noticedialog.h"
 #include "global.h"
 #include "resultdialog.h"

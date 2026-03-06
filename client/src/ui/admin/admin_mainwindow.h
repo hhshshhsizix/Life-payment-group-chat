@@ -3,7 +3,7 @@
 
 #include <QMainWindow>
 #include "global.h"
-#include "socket.h"
+#include "src/common/network/socket.h"
 #include "adminreportdialog.h"
 #include <QListWidget>
 

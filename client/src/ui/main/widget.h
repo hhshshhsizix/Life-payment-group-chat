@@ -12,10 +12,10 @@
 #include <QBuffer>
 #include <QMovie>
 
-#include "LoginSwitch.h"
-#include "socket.h"
-#include "registerdialog.h"
-#include "retrievedialog.h"
+#include "src/ui/dialogs/login/LoginSwitch.h"
+#include "src/common/network/socket.h"
+#include "src/ui/dialogs/login/registerdialog.h"
+#include "src/ui/dialogs/retrievedialog.h"
 #include "global.h"
 #include "mainwindow.h"
 

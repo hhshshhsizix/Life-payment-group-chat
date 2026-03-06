@@ -18,55 +18,61 @@ else()
     add_compile_options(-O2 -Wall -Wextra)
 endif()
 
+# 设置项目可执行文件输出的路径
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+
 # 收集所有需要编译的源文件（.cpp）
 set(SOURCE_FILES
-    Acceptor.cpp
-    Buffer.cpp
-    Channel.cpp
-    ConnectionPool.cpp
-    EventLoop.cpp
-    InetAddress.cpp
-    main.cpp
-    MysqlConn.cpp
-    Socket.cpp
-    TcpConnection.cpp
-    TcpServer.cpp
-    redis.cpp
+src/main.cpp
+    src/base/Buffer.cpp
+    src/net/Acceptor.cpp
+    src/net/Channel.cpp
+    src/net/EventLoop.cpp
+    src/net/InetAddress.cpp
+    src/net/Socket.cpp
+    src/net/TcpConnection.cpp
+    src/net/TcpServer.cpp
+    src/db/ConnectionPool.cpp
+    src/db/MysqlConn.cpp
+    src/cache/redis.cpp
 )
 
 # 收集所有头文件（.h），非必须但便于IDE识别
 set(HEADER_FILES
-    Acceptor.h
-    Buffer.h
-    Callbacks.h
-    Channel.h
-    ConnectionPool.h
-    EventLoop.h
-    HttpManager.h
-    InetAddress.h
-    MysqlConn.h
-    Socket.h
-    TcpConnection.h
-    TcpServer.h
-    ThreadPool.h
-    tools.h
-    UserManager.h
-    redis.hpp
+    src/base/Buffer.h
+    src/base/Callbacks.h
+    src/base/ThreadPool.h
+    src/base/tools.h
+    src/net/Acceptor.h
+    src/net/Channel.h
+    src/net/EventLoop.h
+    src/net/InetAddress.h
+    src/net/Socket.h
+    src/net/TcpConnection.h
+    src/net/TcpServer.h
+    src/db/ConnectionPool.h
+    src/db/MysqlConn.h
+    src/cache/redis.hpp
+    src/http/HttpManager.h
+    src/business/UserManager.h
 )
 
 # 添加可执行文件目标，指定源文件
 add_executable(server ${SOURCE_FILES} ${HEADER_FILES})
 
-# 链接依赖库（根据项目需求补充，比如mysql、pthread等）
-# 示例：链接线程库
+# 让编译器能找到头文件
+target_include_directories(server PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/base
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/db
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cache
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/http
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/business
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/3rdparty
+)
 
-
+# 链接依赖库
 target_link_libraries(server pthread /usr/lib64/mysql/libmysqlclient.so hiredis ssl crypto)
 
-# 如果需要链接mysql客户端库，取消下面注释并调整路径
-# find_library(MYSQL_LIB mysqlclient PATHS /usr/lib64/mysql /usr/lib/mysql)
-# if(MYSQL_LIB)
-#     target_link_libraries(server ${MYSQL_LIB})
-# else()
-#     message(FATAL_ERROR "mysqlclient library not found!")
-# endif()
+

@@ -1,6 +1,6 @@
-#include "widget.h"
-#include "mainwindow.h"
-#include "admin_mainwindow.h"
+#include "src/ui/main/widget.h"
+#include "src/ui/main/mainwindow.h"
+#include "src/ui/admin/admin_mainwindow.h"
 
 #include <QApplication>
 #include <QLocale>
