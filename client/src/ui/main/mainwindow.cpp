@@ -454,7 +454,7 @@ void MainWindow::AddChatMessage(QString sender, QString content, QString time, b
     // 在聊天室界面显示聊天信息
     QWidget* bubbleWidget = nullptr;
     QString appPath = QCoreApplication::applicationDirPath();
-    bool isSelf = (sender == m_username); // 简化isSelf判断（等价于原逻辑）
+    bool isSelf = (sender == m_username);
 
     // 确保cache目录存在（跨电脑/首次运行不会因为目录不存在报错）
     QDir cacheDir(appPath + "/cache");

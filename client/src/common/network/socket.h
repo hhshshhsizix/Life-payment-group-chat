@@ -12,7 +12,11 @@
 #include <QJsonObject>
 #include <QPixmap>
 #include <QBuffer>
-#include <vector>
+#include <Qvector>
+#include <QSslSocket>
+#include <QSslCertificate>
+#include <QSslKey>
+
 
 class Socket : public QObject
 {
@@ -114,9 +118,13 @@ private:
     QNetworkAccessManager* m_manager;
     QString m_url;
     static Socket m_instance;
-    QTcpSocket* m_tcpSocket; // 用于发送聊天消息
     QString m_username;
     QTimer *m_pingTimer;
+
+    QSslSocket *m_tcpSocket; // TLS专用套接字
+    QSslCertificate m_caCert; // CA根证书 用于验证服务端证书
+    QSslCertificate m_clientCert; // 客户端证书 双向认证用
+    QSslKey m_clientKey; // 客户端私钥 双向认证用
 };
 
 #endif // SOCKET_H

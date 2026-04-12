@@ -98,7 +98,7 @@
        <string> 生活缴费</string>
       </property>
       <property name="icon">
-       <iconset resource="picture.qrc">
+       <iconset>
         <normaloff>:/image/image/pay.png</normaloff>:/image/image/pay.png</iconset>
       </property>
       <property name="iconSize">
@@ -130,7 +130,7 @@
        <string>    主页</string>
       </property>
       <property name="icon">
-       <iconset resource="picture.qrc">
+       <iconset>
         <normaloff>:/image/image/home.png</normaloff>:/image/image/home.png</iconset>
       </property>
       <property name="iconSize">
@@ -200,7 +200,7 @@
        <string> 缴费记录</string>
       </property>
       <property name="icon">
-       <iconset resource="picture.qrc">
+       <iconset>
         <normaloff>:/image/image/notes.png</normaloff>:/image/image/notes.png</iconset>
       </property>
       <property name="iconSize">
@@ -229,7 +229,7 @@
        <string> 报修投诉</string>
       </property>
       <property name="icon">
-       <iconset resource="picture.qrc">
+       <iconset>
         <normaloff>:/image/image/report.png</normaloff>:/image/image/report.png</iconset>
       </property>
       <property name="iconSize">
@@ -258,7 +258,7 @@
        <string> 个人中心</string>
       </property>
       <property name="icon">
-       <iconset resource="picture.qrc">
+       <iconset>
         <normaloff>:/image/image/personal.png</normaloff>:/image/image/personal.png</iconset>
       </property>
       <property name="iconSize">
@@ -370,7 +370,7 @@
       <string notr="true"/>
      </property>
      <property name="currentIndex">
-      <number>2</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="page_home">
       <widget class="QLabel" name="label_8">
@@ -1189,8 +1189,6 @@
   <tabstop>chatRoom_widget</tabstop>
   <tabstop>dark_light_btn</tabstop>
  </tabstops>
- <resources>
-  <include location="picture.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

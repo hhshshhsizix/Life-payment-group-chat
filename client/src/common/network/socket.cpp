@@ -16,10 +16,30 @@ Socket::Socket(QObject *parent)
 
 
 
-    m_tcpSocket = new QTcpSocket(this);
-    connect(m_tcpSocket, &QTcpSocket::connected, this, &Socket::onTcpConnected);
-    connect(m_tcpSocket, &QTcpSocket::readyRead, this, &Socket::onTcpReadyRead);
-    connect(m_tcpSocket, &QTcpSocket::disconnected, this, &Socket::onTcpDisconnected);
+    m_tcpSocket = new QSslSocket(this);
+    QSslCertificate cert;
+    QFile file(":/server.crt");
+    if (file.open(QIODevice::ReadOnly)) {
+        cert = QSslCertificate(file.readAll(), QSsl::Pem);
+        file.close();
+
+        QSslConfiguration sslConfig;
+        sslConfig.setCaCertificates({cert}); // 直接传入证书列表
+        m_tcpSocket->setSslConfiguration(sslConfig);
+         qDebug() << "证书加载成功！";
+    }else {
+        qDebug() << "证书加载失败：" << file.errorString();
+    }
+
+    connect(m_tcpSocket, &QSslSocket::sslErrors, this, [=](QList<QSslError> errors) {
+        qDebug() << "SSL 错误：" << errors;
+        m_tcpSocket->ignoreSslErrors();
+    });
+
+
+    connect(m_tcpSocket, &QSslSocket::encrypted, this, &Socket::onTcpConnected);
+    connect(m_tcpSocket, &QSslSocket::readyRead, this, &Socket::onTcpReadyRead);
+    connect(m_tcpSocket, &QSslSocket::disconnected, this, &Socket::onTcpDisconnected);
     connect(m_tcpSocket, &QTcpSocket::errorOccurred, this, [](QAbstractSocket::SocketError error){
         qDebug() << "TCP 错误:" << error;
     });
@@ -27,14 +47,14 @@ Socket::Socket(QObject *parent)
     m_pingTimer = new QTimer(this);
     connect(m_pingTimer, &QTimer::timeout, this, &Socket::sendPingTimer);
 
-    // 连接成功后启动定时器（关键：别提前启动）
-    connect(m_tcpSocket, &QTcpSocket::connected, this, [=](){
+    // 连接成功后启动定时器
+    connect(m_tcpSocket, &QSslSocket::encrypted, this, [=](){
         qDebug() << "聊天连接成功，启动心跳包";
-        m_pingTimer->start(30000);  // 30秒一次，单位：毫秒
+        m_pingTimer->start(30000); // 30秒一次
     });
 
     // 断开连接后停止定时器
-    connect(m_tcpSocket, &QTcpSocket::disconnected, this, [=](){
+    connect(m_tcpSocket, &QSslSocket::disconnected, this, [=](){
         qDebug() << "聊天连接断开，停止心跳包";
         m_pingTimer->stop();
     });
@@ -58,6 +78,7 @@ void Socket::sendPingTimer()
     QJsonDocument doc(pingObj);
     QByteArray pingData = doc.toJson(QJsonDocument::Compact);
     m_tcpSocket->write(pingData);
+    m_tcpSocket->flush();
     qDebug() << "发送心跳包ping：" << pingData;
 }
 
@@ -83,14 +104,24 @@ void Socket::SendJsonRequest(QJsonObject jsonRequest, const QString &action)
     QByteArray jsonData = doc.toJson(QJsonDocument::Compact) + "\n";
 
     QUrl url(m_url + action);
+    //url.setScheme("https"); // 强制HTTPS
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    //m_manager->post(request, jsonData);
+
+    // QSslConfiguration config = QSslConfiguration::defaultConfiguration();
+    // config.setPeerVerifyMode(QSslSocket::VerifyNone);
+    // request.setSslConfiguration(config);
 
     QNetworkReply* reply = m_manager->post(request, jsonData);
     connect(reply, &QNetworkReply::finished, this, [this, reply](){
         this->onReplyFinished(reply);
     });
+
+    // connect(reply, &QNetworkReply::sslErrors, this, [this, reply]() {
+    //     qWarning() << "SSL Errors:" << errors;
+    //     // 开发环境：忽略SSL错误
+    //      reply->ignoreSslErrors();
+    // });
 
 }
 
@@ -305,14 +336,14 @@ void Socket::ConnectChatServer(const QString username, const QString &ip, int po
     }
 
     m_username = username;
-    qDebug() << "正在连接聊天服务器..." << ip << port;
+    qDebug() << "正在连接聊天服务器TLS加密..." << ip << port;
 
-    m_tcpSocket->connectToHost(ip, port);
-    connect(m_tcpSocket, &QTcpSocket::connected, this, [=]() {
-        qDebug() << "✅ 聊天服务器连接成功！"
-                 << "IP:" << ip << "端口:" << port
-                 << "用户名:" << m_username;
-    });
+    m_tcpSocket->connectToHostEncrypted(ip, port);
+    connect(m_tcpSocket, &QSslSocket::encrypted, this, [=]() {
+            qDebug() << "聊天服务器连接成功！"
+                     << "IP:" << ip << "端口:" << port
+                     << "用户名:" << m_username;
+        }, Qt::SingleShotConnection); // 单次连接，避免重复绑定
 }
 
 void Socket::SendGroupMessage(const QString &fromUser, const QString &content)
@@ -778,7 +809,7 @@ void Socket::onTcpReadyRead()
     }
     else if (type == "pong") {
         qDebug() << "收到服务器心跳响应pong，连接正常";
-        // 可选：如果超过N次没收到pong，主动重连
+        // 如果超过N次没收到pong，主动重连
         return;
     }
 }

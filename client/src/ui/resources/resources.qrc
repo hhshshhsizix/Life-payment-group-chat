@@ -2,5 +2,6 @@
     <qresource prefix="/">
         <file>style/dark.qss</file>
         <file>style/light.qss</file>
+        <file>server.crt</file>
     </qresource>
 </RCC>
