@@ -32,9 +32,11 @@ src/main.cpp
     src/net/Socket.cpp
     src/net/TcpConnection.cpp
     src/net/TcpServer.cpp
+    src/net/EventLoopThreadPool.cpp
     src/db/ConnectionPool.cpp
     src/db/MysqlConn.cpp
     src/cache/redis.cpp
+    src/cache/redispool.cpp
 )
 
 # 收集所有头文件（.h），非必须但便于IDE识别
@@ -50,6 +52,7 @@ set(HEADER_FILES
     src/net/Socket.h
     src/net/TcpConnection.h
     src/net/TcpServer.h
+    src/net/EventLoopThreadPool.h
     src/db/ConnectionPool.h
     src/db/MysqlConn.h
     src/cache/redis.hpp

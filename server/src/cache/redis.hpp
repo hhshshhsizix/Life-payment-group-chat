@@ -1,47 +1,73 @@
-
-#ifndef REDIS_H
-#define REDIS_H
+#pragma once
 
 #include <hiredis/hiredis.h>
+#include <string>
 #include <thread>
 #include <functional>
-using namespace std;
+#include <atomic>
 
+//=============================================================================
+// 1. 私聊监听器（独立连接、独立线程）
+//=============================================================================
+class PrivateListener {
+public:
+    static PrivateListener& instance();
+    bool init(const std::string& ip, int port);
+    void set_callback(std::function<void(const std::string& msg)> cb);
+    ~PrivateListener();
 
-class Redis
-{
+private:
+    PrivateListener();
+    void run();
+
+    redisContext* _ctx;
+    std::thread _th;
+    std::function<void(const std::string& msg)> _cb;
+    std::atomic<bool> _running;
+    std::string _last_id;  // 新增：自己的last_id
+};
+
+//=============================================================================
+// 2. 广播监听器（独立连接、独立线程）
+//=============================================================================
+class BroadcastListener {
+public:
+    static BroadcastListener& instance();
+    bool init(const std::string& ip, int port);
+    void set_callback(std::function<void(const std::string& msg)> cb);
+    ~BroadcastListener();
+
+private:
+    BroadcastListener();
+    void run();
+
+    redisContext* _ctx;
+    std::thread _th;
+    std::string _last_id;
+    std::function<void(const std::string&)> _cb;
+    bool _running;
+};
+
+//=============================================================================
+// 3. 业务Redis：只发消息，进连接池
+//=============================================================================
+class Redis {
 public:
     Redis();
     ~Redis();
 
-    // 连接redis服务器 
-    bool connect();
+    bool connect(const std::string& ip, int port);
 
-    // 向redis指定的通道channel发布消息
-    bool publish(int channel, string message);
+    bool publish(int channel, const std::string& msg);
+    bool publish_broadcast(const std::string& msg);
 
-    // 向redis指定的通道subscribe订阅消息
-    bool subscribe(int channel);
+    void set(const std::string& key, const std::string& value);
 
-    // 向redis指定的通道unsubscribe取消订阅消息
-    bool unsubscribe(int channel);
+    bool xadd(const std::string& stream, const std::string& field, const std::string& value);
 
-    // 在独立线程中接收订阅通道中的消息
-    void observer_channel_message();
+    void del(const std::string& key);
 
-    // 初始化向业务层上报通道消息的回调对象
-    void init_notify_handler(function<void(int, string)> fn);
-
+    std::string get(const std::string& key);
 private:
-    // hiredis同步上下文对象，负责publish消息
-    redisContext *_publish_context;
-
-    // hiredis同步上下文对象，负责subscribe消息
-    redisContext *_subcribe_context;
-
-    // 回调操作，收到订阅的消息，给service层上报
-    function<void(int, string)> _notify_message_handler;
+    redisContext* _ctx;
 };
-
-#endif
-

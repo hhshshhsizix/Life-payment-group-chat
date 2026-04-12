@@ -21,13 +21,12 @@ public:
 	}
 	void Listen();
 private:
-	void HandleRead(); // m_accChannelµÄ¶Á»Øµ÷º¯Êý
+	void HandleRead(); // m_accChannelï¿½Ä¶ï¿½ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½
 private:
 	EventLoop* m_loop;
 	Socket m_accSock;
 	Channel m_accChannel;
-	NewConnectionCallback m_newConnectionCb; // ÐÂÁ¬½Óµ½À´Ê±ÐèÒªÖ´ÐÐµÄ»Øµ÷
-	
+	NewConnectionCallback m_newConnectionCb; // ï¿½ï¿½ï¿½ï¿½ï¿½Óµï¿½ï¿½ï¿½Ê±ï¿½ï¿½ÒªÖ´ï¿½ÐµÄ»Øµï¿½
 	int m_idleFd;
 };
 

@@ -6,6 +6,9 @@
 #include "EventLoop.h"
 #include "InetAddress.h"
 #include <any>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 
 class TcpConnection : public std::enable_shared_from_this<TcpConnection>
 {
@@ -13,6 +16,12 @@ public:
 	TcpConnection(EventLoop* loop, int sock, const InetAddress& serverAddr, const InetAddress& clientAddr);
 	~TcpConnection();
 public:
+
+	void setSSL(SSL* ssl) { m_ssl = ssl; }
+    SSL* getSSL() const { return m_ssl; }
+
+	void StartTlsHandshake();
+
 	EventLoop* GetLoop() const { return m_loop; }
 
 	const InetAddress& GetServerAddress() const { return m_sAddr; }
@@ -21,7 +30,7 @@ public:
 	bool IsConnected() const { return m_state == Connected; }
 
 	void SendMessage(const std::string& message);
-	void ShutDown(); // Ö÷¶¯¹Ø±ÕÁ¬½Ó
+	void ShutDown(); // ï¿½ï¿½ï¿½ï¿½ï¿½Ø±ï¿½ï¿½ï¿½ï¿½ï¿½
 
 	void SetConnectionCallback(const ConnectionCallback& cb) {
 		m_connectionCb = cb;
@@ -36,20 +45,22 @@ public:
 		m_closeCb = cb;
 	}
 
-	// °Ñchannel×¢²áµ½eventloopÖĞ
+	// ï¿½ï¿½channel×¢ï¿½áµ½eventloopï¿½ï¿½
 	void CreateConnect();
-	// °Ñchannel´ÓeventloopÖĞÒÆ³ı
+	// ï¿½ï¿½channelï¿½ï¿½eventloopï¿½ï¿½ï¿½Æ³ï¿½
 	void DestroyConnect();
 
 	void setContext(const std::any& context) { m_context = context; }
 	const std::any& getContext() const { return m_context; }
 	bool hasContext() const { return m_context.has_value(); }
+
+	std::string& getChatCache() { return m_chatCache; } // æä¾›ç¼“å­˜è®¿é—®æ¥å£
 private:
 	enum STATE {
-		DisConnected, // Î´Á¬½Ó
-		Connecting, // ÕıÔÚÁ¬½Ó
-		Connected, // ÒÑÁ¬½Ó
-		DisConnecting // ÕıÔÚ¹Ø±ÕÁ¬½Ó
+		DisConnected, // Î´ï¿½ï¿½ï¿½ï¿½
+		Connecting, // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+		Connected, // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+		DisConnecting // ï¿½ï¿½ï¿½Ú¹Ø±ï¿½ï¿½ï¿½ï¿½ï¿½
 	};
 
 	void SetState(STATE s) { m_state = s; }
@@ -61,27 +72,33 @@ private:
 
 	void SendInLoop(const std::string& message);
 	void ShutdownInLoop();
-private:
-	EventLoop* m_loop;
-	const int m_cliSock; // ·şÎñµÄ¿Í»§¶Ësocket
-	const InetAddress m_sAddr; // ·şÎñÆ÷µØÖ·
-	const InetAddress m_cAddr; // ¿Í»§¶ËµØÖ·
 
-	std::any m_context; // ´æÓÃ»§Ãû string
+private:
+
+	SSL* m_ssl = nullptr;
+
+	EventLoop* m_loop;
+	const int m_cliSock; // ï¿½ï¿½ï¿½ï¿½Ä¿Í»ï¿½ï¿½ï¿½socket
+	const InetAddress m_sAddr; // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö·
+	const InetAddress m_cAddr; // ï¿½Í»ï¿½ï¿½Ëµï¿½Ö·
+
+	std::any m_context; // ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ string
 
 	std::atomic<STATE> m_state;
 
-	Buffer m_inputBuffer; // ½ÓÊÕ»º³åÇø
-	Buffer m_outputBuffer; // ·¢ËÍ»º³åÇø
+	Buffer m_inputBuffer; // ï¿½ï¿½ï¿½Õ»ï¿½ï¿½ï¿½ï¿½ï¿½
+	Buffer m_outputBuffer; // ï¿½ï¿½ï¿½Í»ï¿½ï¿½ï¿½ï¿½ï¿½
 
 	std::unique_ptr<Channel> m_channel;
 
-	// ÓÃ»§µÄ»Øµ÷
+	// ï¿½Ã»ï¿½ï¿½Ä»Øµï¿½
 	ConnectionCallback m_connectionCb;
 	RecvMessageCallback m_messageCb;
 	WriteOverCallback m_writeOverCb;
 
-	// ÄÚ²¿»Øµ÷
-	CloseCallback m_closeCb; // ÓÃÓÚÍ¨ÖªTcpServerÒÆ³ı±¾Á¬½Ó
+	// ï¿½Ú²ï¿½ï¿½Øµï¿½
+	CloseCallback m_closeCb; // ï¿½ï¿½ï¿½ï¿½Í¨ÖªTcpServerï¿½Æ³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+
+	std::string m_chatCache;
 };
 

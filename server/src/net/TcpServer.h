@@ -6,7 +6,8 @@
 #include "EventLoop.h"
 #include "ThreadPool.h"
 #include "UserManager.h"
-
+#include "EventLoopThreadPool.h"
+#include <unistd.h>
 class TcpServer
 {
 public:
@@ -14,7 +15,7 @@ public:
 	~TcpServer();
 public:
 	void Start();
-	// ÔÚStartÖ®Ç°µ÷ÓÃ
+	// ï¿½ï¿½StartÖ®Ç°ï¿½ï¿½ï¿½ï¿½
 	void SetThreadsNum(int numThreads);
 
 	void SetRecvMessageCallback(const RecvMessageCallback& cb) {
@@ -23,12 +24,14 @@ public:
 	void SetConnectionCallback(const ConnectionCallback& cb) {
 		m_connectionCb = cb;
 	}
+
+	void enableTls() { m_enableTls = true; }
 private:
-	// ÓÉAcceptorµ÷ÓÃ
+	// ï¿½ï¿½Acceptorï¿½ï¿½ï¿½ï¿½
 	void NewConnection(int cliSock, const InetAddress& cliAddr);
-	// ÓÉTcpConnectionµ÷ÓÃ
+	// ï¿½ï¿½TcpConnectionï¿½ï¿½ï¿½ï¿½
 	void RemoveConnection(const TcpConnectionPtr& conn);
-	// ÓÉ EventLoopµ÷ÓÃ
+	// ï¿½ï¿½ EventLoopï¿½ï¿½ï¿½ï¿½
 	void RemoveConnectionInLoop(const TcpConnectionPtr& conn);
 private:
 	EventLoop* m_loop;
@@ -39,8 +42,11 @@ private:
 	std::unique_ptr<Acceptor> m_acceptor;
 
 	std::shared_ptr<ThreadPool> m_threadPool;
+	std::unique_ptr<EventLoopThreadPool> m_loopPool;
 
 	std::map<std::string, TcpConnectionPtr> m_connections;
 	int m_connectionId;
+
+	bool m_enableTls = false;
 };
 

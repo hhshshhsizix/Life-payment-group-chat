@@ -1,0 +1,64 @@
+# ====================== 编译/构建产物 ======================
+# CMake 构建目录
+server/build/
+client/build/
+build/
+cmake-build-debug/
+cmake-build-release/
+
+# 目标文件、可执行文件
+*.o
+*.a
+*.so
+*.out
+*.exe
+
+# Makefile、CMake 自动生成文件
+Makefile
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles/
+cmake/
+
+# ====================== 敏感证书/密钥文件 ======================
+# TLS 证书、私钥（绝对不能提交！）
+*.key
+*.crt
+*.pem
+*.csr
+server/*.key
+server/*.crt
+client/*.key
+client/*.crt
+
+# ====================== 系统/IDE 临时文件 ======================
+# Linux 系统文件
+*~
+*.swp
+*.swo
+.DS_Store
+
+# IDE 配置文件
+.idea/
+.vscode/
+*.user
+*.userprefs
+*.suo
+*.sdf
+*.opensdf
+
+# Git 临时文件
+.git/
+.gitignore.local
+
+# ====================== 日志/缓存/临时文件 ======================
+*.log
+*.tmp
+*.cache
+__pycache__/
+*.pyc
+
+# ====================== 数据库/Redis 临时文件 ======================
+*.db
+*.rdb
+*.aof

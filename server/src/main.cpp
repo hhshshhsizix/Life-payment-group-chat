@@ -18,7 +18,50 @@
 #include <ctime>
 #include "redis.hpp"
 #include "UserManager.h"
-Redis g_redis;
+#include "redispool.h"
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+SSL_CTX* g_ssl_ctx = nullptr;
+
+void initSSL() {
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_all_algorithms();
+
+    // 创建TLS服务端上下文
+    g_ssl_ctx = SSL_CTX_new(TLS_server_method());
+    if (!g_ssl_ctx) {
+        ERR_print_errors_fp(stderr);
+        exit(1);
+    }
+
+    // 加载服务端证书（和Nginx的server.crt/key用同一套即可）
+    if (SSL_CTX_use_certificate_chain_file(g_ssl_ctx, "/home/admin/code/chatsys/Life-payment-group-chat/server/server.crt") <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(1);
+    }
+    if (SSL_CTX_use_PrivateKey_file(g_ssl_ctx, "/home/admin/code/chatsys/Life-payment-group-chat/server/server.key", SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(1);
+    }
+    if (!SSL_CTX_check_private_key(g_ssl_ctx)) {
+        fprintf(stderr, "Private key does not match the certificate public key\n");
+        exit(1);
+    }
+
+    // 验证Nginx的客户端证书（双向认证，可选）
+    // SSL_CTX_set_verify(g_ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+    // SSL_CTX_load_verify_locations(g_ssl_ctx, "/xxx/ca.crt", NULL);
+}
+
+void cleanupSSL() {
+    SSL_CTX_free(g_ssl_ctx);
+    EVP_cleanup();
+    ERR_free_strings();
+}
+
+//Redis g_redis;
 std::string g_server_id;
 const std::string SALT = "WANNABE_YYDS";
 const std::string SPECIAL_STRING = "Allinus_yejiliayunachaeryeongryujin20190212";
@@ -71,6 +114,14 @@ void onConnection(const TcpConnectionPtr& conn) {
         std::string user = UserManager::getInstance().FindUserByConn(conn);
         if (!user.empty()) {
             UserManager::getInstance().RemoveConnection(conn);
+
+        Redis* redis = RedisPool::instance().get();
+            if (redis) {
+                redis->del("user_router:" + user);
+                RedisPool::instance().put(redis);
+        
+        std::cout << "[Logout] 用户[" << user << "]路由从Redis删除" << std::endl;
+    }
         }
        
     }
@@ -850,10 +901,23 @@ void onMessage(const TcpConnectionPtr& conn, Buffer* buf) {
         if (j["type"] == "chat_login") {
             std::string username = j["username"];
             UserManager::getInstance().AddConnection(username, conn);
+            Redis* redis = RedisPool::instance().get();
+            if (redis) {
+                std::string server_id = g_server_id;
+                redis->set("user_router:" + username, server_id);
+                RedisPool::instance().put(redis);
+                std::cout << "[Login] 用户[" << username << "]路由写入Redis: " << server_id << std::endl;
+            }
         }
         else if (j["type"] == "group_msg") {
-            std::string broadcastMsg = j.dump();
-            UserManager::getInstance().Broadcast(broadcastMsg + "\n");
+            json boardcastJson = j;
+            boardcastJson["sender_id"] = g_server_id;
+            std::string broadcastMsg = boardcastJson.dump();
+            UserManager::getInstance().Broadcast(broadcastMsg);
+            Redis* redis = RedisPool::instance().get();
+            redis->publish_broadcast(broadcastMsg);      // <--- 改这里！！！
+            RedisPool::instance().put(redis);
+
             std::cout << "group message: " << j["text"];
         }
         else if (j["type"] == "chat_msg") {
@@ -862,8 +926,40 @@ void onMessage(const TcpConnectionPtr& conn, Buffer* buf) {
             std::string content = j["text"];
             std::cout << "to " << receiver << ":" << content << std::endl;
             
-            UserManager::getInstance().SendToUser(receiver, msgStr + "\n");
-            UserManager::getInstance().SendToUser(from, msgStr + "\n"); // 发给自己一份
+            bool isLocal = false;
+    {
+        std::lock_guard<std::mutex> lock(UserManager::getInstance().getmutex());
+        auto it = UserManager::getInstance().getuserconnmap().find(receiver);
+        if (it != UserManager::getInstance().getuserconnmap().end()) {
+            auto& conn = it->second;
+            if (conn && conn->IsConnected()) {
+                // 给接收方本地发送，不走Redis
+                conn->SendMessage(msgStr);
+                isLocal = true;
+            }
+        }
+
+        // 给自己发一份回显（无论本地/跨服都能看到）
+        auto self_it = UserManager::getInstance().getuserconnmap().find(from);
+        if (self_it != UserManager::getInstance().getuserconnmap().end()) {
+            auto& self_conn = self_it->second;
+            if (self_conn && self_conn->IsConnected()) {
+                self_conn->SendMessage(msgStr);
+            }
+        }
+    }
+    // 同服务器用户，直接返回，不进Redis
+    if (isLocal) return;
+            Redis* redis = RedisPool::instance().get();
+            std::string target_server = redis->get("user_router:" + receiver);
+            std::string target_stream = "stream_server_" + target_server;
+            bool ok = redis->xadd(target_stream, "msg", msgStr);
+            if (ok) {
+                std::cout << "[SendToUser] 消息成功写入Stream: " << target_stream << ", 接收方: " << receiver << std::endl;
+            } else {
+                std::cerr << "[SendToUser] 写入Stream失败: " << target_stream << std::endl;
+            }
+            RedisPool::instance().put(redis);
         }
         else if (j["type"] == "ping") {
             // TODO:心跳包处理 
@@ -877,46 +973,68 @@ void onMessage(const TcpConnectionPtr& conn, Buffer* buf) {
 
 int Test(uint16_t mainPort, uint16_t chatPort) {
     std::cout << "Main thread starting..." << std::endl;
-    g_server_id = std::to_string(chatPort); 
-    g_redis.connect();
-    g_redis.init_notify_handler([](int channel, std::string msg) {
-        UserManager::getInstance().onRedisRecv(msg);
+    g_server_id = std::to_string(chatPort);
+
+    PrivateListener::instance().init("127.0.0.1", 6379);
+    PrivateListener::instance().set_callback([](const std::string& msg) {   // 新增这个函数
+    UserManager::getInstance().onRedisRecv(msg);
     });
-    g_redis.subscribe(100); // 全服公用频道
-// 修复1：线程池改为堆分配（杜绝野指针崩溃）
-    static ThreadPool* pool = new ThreadPool(8); // 增加线程数到8，应对高并发
+
+    BroadcastListener::instance().init("127.0.0.1", 6379);
+    BroadcastListener::instance().set_callback([](const std::string& msg) {   // 新增这个函数
+    UserManager::getInstance().onRedisBroadcastRecv(msg);
+    });
+    
+    //g_redis.subscribe(100); // 全服公用频道
+    static ThreadPool* pool = new ThreadPool(4); // 增加线程数到8，应对高并发
     g_threadPool = pool;
 
     // 核心：单个EventLoop + 多线程TcpServer（分散IO压力）
-    EventLoop loop;
+    EventLoop mainLoop1;
+    // 主Reactor 2：专门给 聊天服务
+    EventLoop mainLoop2;
 
     // HTTP服务（2551）：设置4个工作线程处理连接
     InetAddress listenAddr(mainPort); 
-    TcpServer server(&loop, listenAddr);
+    TcpServer server(&mainLoop1, listenAddr);
     server.SetConnectionCallback(onConnection);
     server.SetRecvMessageCallback(onMessage);
-    server.SetThreadsNum(4); // 关键：给HTTP服务分配4个线程
+    server.SetThreadsNum(2); // 关键：给HTTP服务分配4个线程
     server.Start();
 
     // 聊天服务（4390）：设置2个工作线程处理连接
     InetAddress chatAddr(chatPort);
-    TcpServer chatserver(&loop, chatAddr);
+    TcpServer chatserver(&mainLoop2, chatAddr);
+    chatserver.enableTls();
     chatserver.SetConnectionCallback(onConnection);
     chatserver.SetRecvMessageCallback(onMessage);
     chatserver.SetThreadsNum(2); // 关键：给聊天服务分配2个线程
     chatserver.Start();
 
-    // 主线程进入事件循环（保留你原来的逻辑）
-    loop.Loop();
-    std::cout << "loop thread starting..." << std::endl;
+    std::thread t1([&]() {
+        std::cout << "HTTP MainLoop thread started..." << std::endl;
+        mainLoop1.Loop();
+    });
+
+    std::thread t2([&]() {
+        std::cout << "Chat MainLoop thread started..." << std::endl;
+        mainLoop2.Loop();
+    });
+
+    // 等待两个主循环
+    t1.join();
+    t2.join();
     return 0;
 }
 
 int main(int argc, char* argv[]) {
+    initSSL();
     //test_Buffer();
     // 默认端口
     uint16_t mainPort = 2552;
     uint16_t chatPort = 4389;
+
+    RedisPool::instance().init(8, "127.0.0.1", 6379);
 
     // 解析命令行参数
     if (argc >= 2) {
@@ -926,7 +1044,7 @@ int main(int argc, char* argv[]) {
         chatPort = static_cast<uint16_t>(atoi(argv[2]));
     }
 
-    // 简单校验端口合法性
+    // 简单校验端口合法性A
     if (mainPort < 1024 || mainPort > 65535 || chatPort < 1024 || chatPort > 65535) {
         std::cerr << "端口非法！请输入 1024-65535 之间的端口" << std::endl;
         return -1;
